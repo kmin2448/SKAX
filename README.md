@@ -13,8 +13,8 @@
 
 | 카드 | 시트 |
 |------|------|
-| 행사운영 | [Google Sheet](https://docs.google.com/spreadsheets/d/14PVCDzCXcEBTCx4e4vGfkTSTPivqsipQC4Ym_A6FHLA/edit?gid=115072733) |
-| 교육운영 | [Google Sheet](https://docs.google.com/spreadsheets/d/1j3mOn0Np0kv9UzT_cb6lBVFahkWJkwOlrx4t1044w9k/edit?gid=1923123151) |
+| 행사운영 | [Google Sheet](https://docs.google.com/spreadsheets/d/1j3mOn0Np0kv9UzT_cb6lBVFahkWJkwOlrx4t1044w9k/edit?gid=1923123151) |
+| 교육운영 | [Google Sheet](https://docs.google.com/spreadsheets/d/14PVCDzCXcEBTCx4e4vGfkTSTPivqsipQC4Ym_A6FHLA/edit?gid=115072733) |
 
 카드와 시트의 매칭을 바꾸려면 `index.html`의 `SHEETS` 객체에서 `url` 값을 수정하면 됩니다.
 
