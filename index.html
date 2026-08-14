@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SKAX 협업 시트 관리</title>
+<style>
+  :root {
+    --bg: #f4f6fb;
+    --card-bg: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --primary: #2563eb;
+    --primary-dark: #1e40af;
+    --event: #2563eb;
+    --edu: #059669;
+    --radius: 16px;
+    --shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+    --shadow-hover: 0 12px 32px rgba(15, 23, 42, 0.16);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  /* ===== 홈 화면 ===== */
+  #home {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+  }
+  .home-header { text-align: center; margin-bottom: 48px; }
+  .home-header .badge {
+    display: inline-block;
+    background: #e0e7ff;
+    color: var(--primary-dark);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 6px 14px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+  }
+  .home-header h1 {
+    font-size: clamp(26px, 4vw, 38px);
+    font-weight: 800;
+    margin-bottom: 12px;
+  }
+  .home-header p {
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 380px));
+    gap: 28px;
+    justify-content: center;
+    width: 100%;
+    max-width: 900px;
+  }
+  .card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 36px 32px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    text-align: left;
+  }
+  .card:hover, .card:focus-visible {
+    transform: translateY(-6px);
+    box-shadow: var(--shadow-hover);
+    outline: none;
+  }
+  .card.event:hover, .card.event:focus-visible { border-color: var(--event); }
+  .card.edu:hover,   .card.edu:focus-visible   { border-color: var(--edu); }
+  .card .icon {
+    width: 56px; height: 56px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    margin-bottom: 20px;
+  }
+  .card.event .icon { background: #dbeafe; }
+  .card.edu .icon   { background: #d1fae5; }
+  .card h2 { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+  .card p  { color: var(--muted); font-size: 14.5px; line-height: 1.65; margin-bottom: 22px; }
+  .card .open-label {
+    font-size: 14px; font-weight: 700;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .card.event .open-label { color: var(--event); }
+  .card.edu   .open-label { color: var(--edu); }
+  .home-footer { margin-top: 48px; color: var(--muted); font-size: 13px; text-align: center; line-height: 1.7; }
+
+  /* ===== 시트 화면 ===== */
+  #sheet-view {
+    display: none;
+    height: 100vh;
+    flex-direction: column;
+  }
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 18px;
+    background: var(--card-bg);
+    border-bottom: 1px solid #e5e7eb;
+    flex-wrap: wrap;
+  }
+  .toolbar .back-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    padding: 9px 18px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .toolbar .back-btn:hover { background: var(--primary-dark); }
+  .toolbar .sheet-title {
+    font-size: 16px; font-weight: 700;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .toolbar .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .toolbar .spacer { flex: 1; }
+  .toolbar .new-tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--primary);
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background 0.15s ease;
+  }
+  .toolbar .new-tab:hover { background: #dbeafe; }
+  .iframe-wrap { flex: 1; position: relative; background: #fff; }
+  .iframe-wrap iframe {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    border: none;
+  }
+  .loading {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 14px;
+    background: #fff;
+    color: var(--muted);
+    font-size: 14.5px;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .loading .spinner {
+    width: 36px; height: 36px;
+    border: 4px solid #e5e7eb;
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading.hidden { opacity: 0; }
+  .embed-help {
+    padding: 8px 18px;
+    background: #fffbeb;
+    border-top: 1px solid #fde68a;
+    color: #92400e;
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== 첫 페이지: 카드 선택 ===== -->
+<main id="home">
+  <header class="home-header">
+    <span class="badge">사업단 · SKAX 협업</span>
+    <h1>협업 시트 관리</h1>
+    <p>일정 조율 및 협조사항을 구글 시트로 지속 관리합니다.<br />아래 카드를 선택해 시트를 열람하고 바로 편집하세요.</p>
+  </header>
+
+  <section class="cards">
+    <div class="card event" role="button" tabindex="0" data-sheet="event" aria-label="행사운영 시트 열기">
+      <div class="icon">📅</div>
+      <h2>행사운영</h2>
+      <p>행사 일정 조율, 운영 준비사항, 사업단·SKAX 간 협조 요청 내용을 관리합니다.</p>
+      <span class="open-label">시트 열기 →</span>
+    </div>
+
+    <div class="card edu" role="button" tabindex="0" data-sheet="edu" aria-label="교육운영 시트 열기">
+      <div class="icon">🎓</div>
+      <h2>교육운영</h2>
+      <p>교육 일정, 커리큘럼 운영 현황, 교육 관련 협조사항을 관리합니다.</p>
+      <span class="open-label">시트 열기 →</span>
+    </div>
+  </section>
+
+  <footer class="home-footer">
+    시트 편집 권한은 구글 계정 공유 설정을 따릅니다.<br />
+    편집이 안 될 경우 시트 화면 우측 상단의 “새 탭에서 열기”를 이용하세요.
+  </footer>
+</main>
+
+<!-- ===== 시트 화면 ===== -->
+<div id="sheet-view">
+  <div class="toolbar">
+    <button class="back-btn" id="back-btn" type="button">← 홈으로</button>
+    <span class="sheet-title"><span class="dot" id="sheet-dot"></span><span id="sheet-title-text"></span></span>
+    <span class="spacer"></span>
+    <a class="new-tab" id="new-tab-link" href="#" target="_blank" rel="noopener">새 탭에서 열기 ↗</a>
+  </div>
+  <div class="iframe-wrap">
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <span>구글 시트를 불러오는 중...</span>
+    </div>
+    <iframe id="sheet-frame" title="구글 시트" allow="clipboard-read; clipboard-write"></iframe>
+  </div>
+  <div class="embed-help">
+    ⚠️ 화면 안에서 로그인이 풀려 보이거나 편집이 되지 않으면, 브라우저의 서드파티 쿠키 차단 때문일 수 있습니다. 이 경우 “새 탭에서 열기”로 접속하면 정상적으로 편집할 수 있습니다.
+  </div>
+</div>
+
+<script>
+  const SHEETS = {
+    event: {
+      title: "행사운영",
+      color: "#2563eb",
+      url: "https://docs.google.com/spreadsheets/d/14PVCDzCXcEBTCx4e4vGfkTSTPivqsipQC4Ym_A6FHLA/edit?gid=115072733#gid=115072733"
+    },
+    edu: {
+      title: "교육운영",
+      color: "#059669",
+      url: "https://docs.google.com/spreadsheets/d/1j3mOn0Np0kv9UzT_cb6lBVFahkWJkwOlrx4t1044w9k/edit?gid=1923123151#gid=1923123151"
+    }
+  };
+
+  const home = document.getElementById("home");
+  const sheetView = document.getElementById("sheet-view");
+  const frame = document.getElementById("sheet-frame");
+  const loading = document.getElementById("loading");
+  const titleText = document.getElementById("sheet-title-text");
+  const dot = document.getElementById("sheet-dot");
+  const newTabLink = document.getElementById("new-tab-link");
+
+  function showSheet(key) {
+    const sheet = SHEETS[key];
+    if (!sheet) { showHome(); return; }
+    titleText.textContent = sheet.title;
+    dot.style.background = sheet.color;
+    newTabLink.href = sheet.url;
+    loading.classList.remove("hidden");
+    if (frame.src !== sheet.url) frame.src = sheet.url;
+    home.style.display = "none";
+    sheetView.style.display = "flex";
+    document.title = sheet.title + " · SKAX 협업 시트 관리";
+  }
+
+  function showHome() {
+    sheetView.style.display = "none";
+    home.style.display = "flex";
+    frame.src = "about:blank";
+    document.title = "SKAX 협업 시트 관리";
+  }
+
+  function route() {
+    const key = location.hash.replace("#", "");
+    if (SHEETS[key]) showSheet(key);
+    else showHome();
+  }
+
+  document.querySelectorAll(".card").forEach(card => {
+    const open = () => { location.hash = card.dataset.sheet; };
+    card.addEventListener("click", open);
+    card.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+    });
+  });
+
+  document.getElementById("back-btn").addEventListener("click", () => {
+    location.hash = "";
+  });
+
+  frame.addEventListener("load", () => {
+    if (frame.src !== "about:blank") loading.classList.add("hidden");
+  });
+
+  window.addEventListener("hashchange", route);
+  route();
+</script>
+
+</body>
+</html>
