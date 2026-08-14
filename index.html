@@ -101,6 +101,102 @@
   .card.edu   .open-label { color: var(--edu); }
   .home-footer { margin-top: 48px; color: var(--muted); font-size: 13px; text-align: center; line-height: 1.7; }
 
+  /* ===== 담당자 (컨택포인트) ===== */
+  .contact-divider {
+    width: 25%;
+    min-width: 180px;
+    border: none;
+    border-top: 1px solid #d1d5db;
+    margin: 28px auto 24px;
+  }
+  .contacts { width: 100%; max-width: 760px; text-align: center; }
+  .contacts h3 {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: var(--text);
+  }
+  .contact-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    text-align: left;
+  }
+  .contact-group {
+    background: var(--card-bg);
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .contact-group .org-name {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .contact-group.org-biz .org-name span:first-child { color: var(--primary-dark); }
+  .contact-group.org-skax .org-name span:first-child { color: var(--edu); }
+  .contact-group .add-row {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+  .contact-group .add-row:hover { background: #f3f4f6; color: var(--text); }
+  .contact-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .contact-table th {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    text-align: left;
+    padding: 4px 6px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .contact-table th.col-del { width: 22px; }
+  .contact-table td {
+    font-size: 12.5px;
+    padding: 5px 6px;
+    border-bottom: 1px solid #f3f4f6;
+    color: var(--text);
+    word-break: break-all;
+  }
+  .contact-table td.editable { cursor: pointer; }
+  .contact-table td.editable:hover { background: #f9fafb; }
+  .contact-table td.editable:focus {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+    background: #fff;
+    cursor: text;
+  }
+  .contact-table td.editable:empty::before {
+    content: attr(data-placeholder);
+    color: #c7ccd4;
+  }
+  .contact-table td.cell-del { text-align: center; padding: 0; }
+  .contact-table .del-row {
+    background: none;
+    border: none;
+    color: #d1d5db;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    visibility: hidden;
+  }
+  .contact-table tr:hover .del-row { visibility: visible; }
+  .contact-table .del-row:hover { color: #ef4444; background: #fef2f2; }
+  .contact-hint {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #b3b9c4;
+  }
+
   /* ===== 시트 화면 ===== */
   #sheet-view {
     display: none;
@@ -268,6 +364,33 @@
     시트 편집 권한은 구글 계정 공유 설정을 따릅니다.<br />
     편집이 안 될 경우 시트 화면 우측 상단의 “새 탭에서 열기”를 이용하세요.
   </footer>
+
+  <hr class="contact-divider" />
+
+  <section class="contacts">
+    <h3>담당자 (Contact Point)</h3>
+    <div class="contact-groups">
+      <div class="contact-group org-biz" data-org="biz">
+        <div class="org-name"><span>사업단</span><button type="button" class="add-row" data-org="biz">+ 행 추가</button></div>
+        <table class="contact-table">
+          <thead>
+            <tr><th>담당 업무</th><th>이름</th><th>연락처</th><th class="col-del"></th></tr>
+          </thead>
+          <tbody id="contact-body-biz"></tbody>
+        </table>
+      </div>
+      <div class="contact-group org-skax" data-org="skax">
+        <div class="org-name"><span>SKAX</span><button type="button" class="add-row" data-org="skax">+ 행 추가</button></div>
+        <table class="contact-table">
+          <thead>
+            <tr><th>담당 업무</th><th>이름</th><th>연락처</th><th class="col-del"></th></tr>
+          </thead>
+          <tbody id="contact-body-skax"></tbody>
+        </table>
+      </div>
+    </div>
+    <p class="contact-hint">셀을 더블클릭하면 수정할 수 있으며, 다른 곳을 클릭하면 자동 저장되어 모든 접속자에게 공유됩니다.</p>
+  </section>
 </main>
 
 <!-- ===== 시트 화면 ===== -->
@@ -431,6 +554,162 @@
     if (!isNaN(saved)) zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, saved));
   } catch (e) {}
   applyZoom();
+
+  /* ===== 담당자 (컨택포인트): 더블클릭 편집, 포커스 아웃 시 자동 저장 =====
+     저장소: Supabase (모든 접속자에게 공유). localStorage는 오프라인 캐시로만 사용. */
+  const SB_URL = "https://ytkidrqfyguufyzfpwqy.supabase.co";
+  const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0a2lkcnFmeWd1dWZ5emZwd3F5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMTYyMzMsImV4cCI6MjA5MTY5MjIzM30.sfIujbIeRyMWu6GfZ3d42vOOCEQBZMoBuYWEj-FlH30";
+  const SB_HEADERS = {
+    "apikey": SB_KEY,
+    "Authorization": "Bearer " + SB_KEY,
+    "Content-Type": "application/json"
+  };
+  const CONTACT_KEY = "contactPoints.v1";
+  const CONTACT_FIELDS = [
+    { key: "role", placeholder: "담당 업무" },
+    { key: "name", placeholder: "이름" },
+    { key: "contact", placeholder: "연락처" }
+  ];
+  const emptyRow = () => ({ role: "", name: "", contact: "" });
+  let contacts = { biz: [emptyRow(), emptyRow()], skax: [emptyRow(), emptyRow()] };
+  const contactHint = document.querySelector(".contact-hint");
+  const defaultHint = contactHint.textContent;
+
+  function setHint(text, temporary) {
+    contactHint.textContent = text;
+    if (temporary) setTimeout(() => { contactHint.textContent = defaultHint; }, 1500);
+  }
+
+  function cacheContacts() {
+    try { localStorage.setItem(CONTACT_KEY, JSON.stringify(contacts)); } catch (e) {}
+  }
+
+  async function loadContacts() {
+    // 1) 캐시 먼저 표시(빠른 렌더), 2) 서버 데이터로 갱신
+    try {
+      const cached = JSON.parse(localStorage.getItem(CONTACT_KEY));
+      if (cached && Array.isArray(cached.biz) && Array.isArray(cached.skax)) {
+        contacts = cached;
+        renderContacts("biz"); renderContacts("skax");
+      }
+    } catch (e) {}
+    try {
+      const res = await fetch(SB_URL + "/rest/v1/skax_contact_points?select=org,data", { headers: SB_HEADERS });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const rows = await res.json();
+      rows.forEach(r => {
+        if ((r.org === "biz" || r.org === "skax") && Array.isArray(r.data) && r.data.length) {
+          contacts[r.org] = r.data;
+        }
+      });
+      cacheContacts();
+      renderContacts("biz"); renderContacts("skax");
+    } catch (e) {
+      setHint("서버에서 담당자 정보를 불러오지 못했습니다. 네트워크 확인 후 새로고침 해주세요.", false);
+    }
+  }
+
+  async function saveContacts(org) {
+    cacheContacts();
+    try {
+      const res = await fetch(SB_URL + "/rest/v1/skax_contact_points", {
+        method: "POST",
+        headers: Object.assign({ "Prefer": "resolution=merge-duplicates" }, SB_HEADERS),
+        body: JSON.stringify([{ org: org, data: contacts[org], updated_at: new Date().toISOString() }])
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      setHint("저장되었습니다. 모든 접속자에게 공유됩니다.", true);
+    } catch (e) {
+      setHint("저장에 실패했습니다. 네트워크 확인 후 다시 시도해주세요.", true);
+    }
+  }
+
+  function renderContacts(org) {
+    const tbody = document.getElementById("contact-body-" + org);
+    tbody.innerHTML = "";
+    contacts[org].forEach((row, idx) => {
+      const tr = document.createElement("tr");
+      CONTACT_FIELDS.forEach(f => {
+        const td = document.createElement("td");
+        td.className = "editable";
+        td.dataset.org = org;
+        td.dataset.idx = String(idx);
+        td.dataset.field = f.key;
+        td.dataset.placeholder = f.placeholder;
+        td.textContent = row[f.key] || "";
+        td.title = "더블클릭하여 편집";
+        tr.appendChild(td);
+      });
+      const delTd = document.createElement("td");
+      delTd.className = "cell-del";
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "del-row";
+      delBtn.textContent = "×";
+      delBtn.title = "행 삭제";
+      delBtn.addEventListener("click", () => {
+        contacts[org].splice(idx, 1);
+        if (contacts[org].length === 0) contacts[org].push(emptyRow());
+        saveContacts(org);
+        renderContacts(org);
+      });
+      delTd.appendChild(delBtn);
+      tr.appendChild(delTd);
+      tbody.appendChild(tr);
+    });
+  }
+
+  document.querySelectorAll(".contacts .add-row").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const org = btn.dataset.org;
+      contacts[org].push(emptyRow());
+      saveContacts(org);
+      renderContacts(org);
+    });
+  });
+
+  document.querySelector(".contacts").addEventListener("dblclick", e => {
+    const td = e.target.closest("td.editable");
+    if (!td || td.isContentEditable) return;
+    td.contentEditable = "true";
+    td.focus();
+    // 커서를 텍스트 끝으로 이동
+    const range = document.createRange();
+    range.selectNodeContents(td);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
+
+  // 편집 중 다른 곳을 클릭하면(blur) 자동 저장
+  document.querySelector(".contacts").addEventListener("focusout", e => {
+    const td = e.target.closest ? e.target.closest("td.editable") : null;
+    if (!td || !td.isContentEditable) return;
+    td.contentEditable = "false";
+    const { org, idx, field } = td.dataset;
+    const value = td.textContent.trim();
+    td.textContent = value;
+    contacts[org][Number(idx)][field] = value;
+    saveContacts(org);
+  });
+
+  // Enter 키로도 편집 종료(저장), Esc는 취소
+  document.querySelector(".contacts").addEventListener("keydown", e => {
+    const td = e.target.closest ? e.target.closest("td.editable") : null;
+    if (!td || !td.isContentEditable) return;
+    if (e.key === "Enter") { e.preventDefault(); td.blur(); }
+    else if (e.key === "Escape") {
+      const { org, idx, field } = td.dataset;
+      td.textContent = contacts[org][Number(idx)][field] || "";
+      td.contentEditable = "false";
+      td.blur();
+    }
+  });
+
+  renderContacts("biz");
+  renderContacts("skax");
+  loadContacts();
 
   window.addEventListener("hashchange", route);
   route();
