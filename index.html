@@ -135,6 +135,40 @@
   }
   .toolbar .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   .toolbar .spacer { flex: 1; }
+  .zoom-ctrl {
+    display: inline-flex; align-items: center;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .zoom-ctrl button {
+    background: transparent;
+    border: none;
+    width: 34px; height: 34px;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .zoom-ctrl button:hover { background: #e5e7eb; }
+  .zoom-ctrl button:disabled { color: #c0c4cc; cursor: default; background: transparent; }
+  .zoom-ctrl .zoom-level {
+    min-width: 52px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    border-left: 1px solid #e5e7eb;
+    border-right: 1px solid #e5e7eb;
+    padding: 0 4px;
+    background: transparent;
+    height: 34px;
+    line-height: 34px;
+    cursor: pointer;
+  }
+  .zoom-ctrl .zoom-level:hover { background: #e5e7eb; }
   .toolbar .new-tab {
     display: inline-flex; align-items: center; gap: 6px;
     color: var(--primary);
@@ -148,11 +182,12 @@
     transition: background 0.15s ease;
   }
   .toolbar .new-tab:hover { background: #dbeafe; }
-  .iframe-wrap { flex: 1; position: relative; background: #fff; }
+  .iframe-wrap { flex: 1; position: relative; background: #fff; overflow: hidden; }
   .iframe-wrap iframe {
-    position: absolute; inset: 0;
+    position: absolute; top: 0; left: 0;
     width: 100%; height: 100%;
     border: none;
+    transform-origin: 0 0;
   }
   .loading {
     position: absolute; inset: 0;
@@ -222,6 +257,11 @@
     <button class="back-btn" id="back-btn" type="button">← 홈으로</button>
     <span class="sheet-title"><span class="dot" id="sheet-dot"></span><span id="sheet-title-text"></span></span>
     <span class="spacer"></span>
+    <span class="zoom-ctrl" title="시트 화면 배율 조절">
+      <button type="button" id="zoom-out" aria-label="시트 축소">−</button>
+      <span class="zoom-level" id="zoom-level" role="button" tabindex="0" title="클릭하면 100%로 초기화">100%</span>
+      <button type="button" id="zoom-in" aria-label="시트 확대">+</button>
+    </span>
     <a class="new-tab" id="new-tab-link" href="#" target="_blank" rel="noopener">새 탭에서 열기 ↗</a>
   </div>
   <div class="iframe-wrap">
@@ -299,6 +339,52 @@
   frame.addEventListener("load", () => {
     if (frame.src !== "about:blank") loading.classList.add("hidden");
   });
+
+  /* ===== 시트 화면 배율 조절 (iframe 영역에만 적용) ===== */
+  const ZOOM_MIN = 50, ZOOM_MAX = 200, ZOOM_STEP = 10;
+  let zoom = 100;
+  const zoomInBtn = document.getElementById("zoom-in");
+  const zoomOutBtn = document.getElementById("zoom-out");
+  const zoomLevel = document.getElementById("zoom-level");
+
+  function applyZoom() {
+    const scale = zoom / 100;
+    // iframe을 scale로 확대/축소하되, 보이는 영역을 꽉 채우도록 크기를 역보정한다
+    frame.style.transform = "scale(" + scale + ")";
+    frame.style.width = (100 / scale) + "%";
+    frame.style.height = (100 / scale) + "%";
+    zoomLevel.textContent = zoom + "%";
+    zoomOutBtn.disabled = zoom <= ZOOM_MIN;
+    zoomInBtn.disabled = zoom >= ZOOM_MAX;
+    try { localStorage.setItem("sheetZoom", String(zoom)); } catch (e) {}
+  }
+
+  function setZoom(value) {
+    zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
+    applyZoom();
+  }
+
+  zoomInBtn.addEventListener("click", () => setZoom(zoom + ZOOM_STEP));
+  zoomOutBtn.addEventListener("click", () => setZoom(zoom - ZOOM_STEP));
+  zoomLevel.addEventListener("click", () => setZoom(100));
+  zoomLevel.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setZoom(100); }
+  });
+
+  // Ctrl(⌘) + / - / 0 단축키: 시트 화면이 열려 있을 때 브라우저 전체 배율 대신 시트 배율을 조절
+  window.addEventListener("keydown", e => {
+    if (sheetView.style.display !== "flex") return;
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.key === "+" || e.key === "=") { e.preventDefault(); setZoom(zoom + ZOOM_STEP); }
+    else if (e.key === "-") { e.preventDefault(); setZoom(zoom - ZOOM_STEP); }
+    else if (e.key === "0") { e.preventDefault(); setZoom(100); }
+  });
+
+  try {
+    const saved = parseInt(localStorage.getItem("sheetZoom"), 10);
+    if (!isNaN(saved)) zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, saved));
+  } catch (e) {}
+  applyZoom();
 
   window.addEventListener("hashchange", route);
   route();
