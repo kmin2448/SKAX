@@ -135,6 +135,25 @@
   }
   .toolbar .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
   .toolbar .spacer { flex: 1; }
+  .toolbar .edit-toggle {
+    display: inline-flex; align-items: center; gap: 5px;
+    color: var(--muted);
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    padding: 5px 11px;
+    border-radius: 8px;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .toolbar .edit-toggle:hover { background: #e5e7eb; }
+  .toolbar .edit-toggle.active {
+    color: #fff;
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+  .toolbar .edit-toggle.active:hover { background: var(--primary-dark); }
   .zoom-ctrl {
     display: inline-flex; align-items: center;
     background: #f3f4f6;
@@ -183,12 +202,12 @@
   }
   .toolbar .new-tab:hover { background: #dbeafe; }
   .toolbar .embed-note {
-    flex-basis: 100%;
+    flex: 0 1 auto;
+    min-width: 0;
     text-align: right;
     font-size: 10.5px;
     color: #b3b9c4;
-    line-height: 1.4;
-    margin-top: 2px;
+    line-height: 1.3;
   }
   .iframe-wrap { flex: 1; position: relative; background: #fff; overflow: hidden; }
   .iframe-wrap iframe {
@@ -257,13 +276,14 @@
     <button class="back-btn" id="back-btn" type="button">← 홈으로</button>
     <span class="sheet-title"><span class="dot" id="sheet-dot"></span><span id="sheet-title-text"></span></span>
     <span class="spacer"></span>
+    <span class="embed-note">화면 안에서 로그인이 풀려 보이거나 편집이 되지 않으면 브라우저의 서드파티 쿠키 차단 때문일 수 있습니다. 이 경우 “새 탭에서 열기”로 접속하면 정상적으로 편집할 수 있습니다.</span>
+    <button class="edit-toggle" id="edit-toggle" type="button" aria-pressed="false" title="구글 시트 메뉴·툴바 표시/숨김">✏️ 편집하기</button>
     <span class="zoom-ctrl" title="시트 화면 배율 조절">
       <button type="button" id="zoom-out" aria-label="시트 축소">−</button>
       <span class="zoom-level" id="zoom-level" role="button" tabindex="0" title="클릭하면 100%로 초기화">100%</span>
       <button type="button" id="zoom-in" aria-label="시트 확대">+</button>
     </span>
     <a class="new-tab" id="new-tab-link" href="#" target="_blank" rel="noopener">새 탭에서 열기 ↗</a>
-    <span class="embed-note">화면 안에서 로그인이 풀려 보이거나 편집이 되지 않으면 브라우저의 서드파티 쿠키 차단 때문일 수 있습니다. 이 경우 “새 탭에서 열기”로 접속하면 정상적으로 편집할 수 있습니다.</span>
   </div>
   <div class="iframe-wrap">
     <div class="loading" id="loading">
@@ -279,14 +299,22 @@
     event: {
       title: "행사운영",
       color: "#2563eb",
-      url: "https://docs.google.com/spreadsheets/d/14PVCDzCXcEBTCx4e4vGfkTSTPivqsipQC4Ym_A6FHLA/edit?gid=115072733#gid=115072733"
+      id: "14PVCDzCXcEBTCx4e4vGfkTSTPivqsipQC4Ym_A6FHLA",
+      gid: "115072733"
     },
     edu: {
       title: "교육운영",
       color: "#059669",
-      url: "https://docs.google.com/spreadsheets/d/1j3mOn0Np0kv9UzT_cb6lBVFahkWJkwOlrx4t1044w9k/edit?gid=1923123151#gid=1923123151"
+      id: "1j3mOn0Np0kv9UzT_cb6lBVFahkWJkwOlrx4t1044w9k",
+      gid: "1923123151"
     }
   };
+
+  // full=true: 구글 시트 메뉴·툴바 포함 전체 편집 UI / full=false: rm=minimal (메뉴·툴바 숨김, 셀 편집은 가능)
+  function sheetUrl(sheet, full) {
+    return "https://docs.google.com/spreadsheets/d/" + sheet.id + "/edit?gid=" + sheet.gid +
+      (full ? "" : "&rm=minimal") + "#gid=" + sheet.gid;
+  }
 
   const home = document.getElementById("home");
   const sheetView = document.getElementById("sheet-view");
@@ -295,26 +323,46 @@
   const titleText = document.getElementById("sheet-title-text");
   const dot = document.getElementById("sheet-dot");
   const newTabLink = document.getElementById("new-tab-link");
+  const editToggle = document.getElementById("edit-toggle");
+
+  let editMode = false;
+  let currentKey = null;
 
   function showSheet(key) {
     const sheet = SHEETS[key];
     if (!sheet) { showHome(); return; }
+    currentKey = key;
     titleText.textContent = sheet.title;
     dot.style.background = sheet.color;
-    newTabLink.href = sheet.url;
-    loading.classList.remove("hidden");
-    if (frame.src !== sheet.url) frame.src = sheet.url;
+    newTabLink.href = sheetUrl(sheet, true);
+    const url = sheetUrl(sheet, editMode);
+    if (frame.src !== url) {
+      loading.classList.remove("hidden");
+      frame.src = url;
+    }
     home.style.display = "none";
     sheetView.style.display = "flex";
     document.title = sheet.title + " · SKAX 협업 시트 관리";
   }
 
   function showHome() {
+    currentKey = null;
     sheetView.style.display = "none";
     home.style.display = "flex";
     frame.src = "about:blank";
     document.title = "SKAX 협업 시트 관리";
   }
+
+  editToggle.addEventListener("click", () => {
+    editMode = !editMode;
+    editToggle.classList.toggle("active", editMode);
+    editToggle.setAttribute("aria-pressed", String(editMode));
+    editToggle.textContent = editMode ? "✏️ 편집 중" : "✏️ 편집하기";
+    if (currentKey) {
+      loading.classList.remove("hidden");
+      frame.src = sheetUrl(SHEETS[currentKey], editMode);
+    }
+  });
 
   function route() {
     const key = location.hash.replace("#", "");
