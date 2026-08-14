@@ -311,9 +311,11 @@
   };
 
   // full=true: 구글 시트 메뉴·툴바 포함 전체 편집 UI / full=false: rm=minimal (메뉴·툴바 숨김, 셀 편집은 가능)
-  function sheetUrl(sheet, full) {
-    return "https://docs.google.com/spreadsheets/d/" + sheet.id + "/edit?gid=" + sheet.gid +
-      (full ? "" : "&rm=minimal") + "#gid=" + sheet.gid;
+  // keepPosition=true: gid를 지정하지 않고 열어, 구글 계정이 기억하는 마지막 탭·셀 위치를 유지
+  function sheetUrl(sheet, full, keepPosition) {
+    const base = "https://docs.google.com/spreadsheets/d/" + sheet.id + "/edit";
+    if (keepPosition) return base + (full ? "" : "?rm=minimal");
+    return base + "?gid=" + sheet.gid + (full ? "" : "&rm=minimal") + "#gid=" + sheet.gid;
   }
 
   const home = document.getElementById("home");
@@ -360,7 +362,8 @@
     editToggle.textContent = editMode ? "✏️ 편집 중" : "✏️ 편집하기";
     if (currentKey) {
       loading.classList.remove("hidden");
-      frame.src = sheetUrl(SHEETS[currentKey], editMode);
+      // 토글로 다시 불러올 때는 보고 있던 탭·셀 위치를 유지한 채 전환
+      frame.src = sheetUrl(SHEETS[currentKey], editMode, true);
     }
   });
 
