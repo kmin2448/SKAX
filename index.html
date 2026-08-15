@@ -101,6 +101,37 @@
   .card.edu   .open-label { color: var(--edu); }
   .home-footer { margin-top: 48px; color: var(--muted); font-size: 13px; text-align: center; line-height: 1.7; }
 
+  /* ===== 최근 수정 내역 ===== */
+  .recent-divider {
+    width: 20%;
+    min-width: 160px;
+    border: none;
+    border-top: 1px solid #d1d5db;
+    margin: 28px auto 20px;
+  }
+  .recent { text-align: center; }
+  .recent h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+  .recent ul { list-style: none; }
+  .recent li {
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.9;
+  }
+  .recent .r-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: 1px;
+  }
+  .recent .r-title { font-weight: 700; color: var(--text); }
+  .recent .r-empty { font-size: 12px; color: #b3b9c4; }
+
   /* ===== 시트 화면 ===== */
   #sheet-view {
     display: none;
@@ -268,6 +299,13 @@
     시트 편집 권한은 구글 계정 공유 설정을 따릅니다.<br />
     편집이 안 될 경우 시트 화면 우측 상단의 “새 탭에서 열기”를 이용하세요.
   </footer>
+
+  <hr class="recent-divider" />
+
+  <section class="recent">
+    <h3>최근 수정 내역</h3>
+    <ul id="recent-list"><li class="r-empty">불러오는 중...</li></ul>
+  </section>
 </main>
 
 <!-- ===== 시트 화면 ===== -->
@@ -434,6 +472,47 @@
     if (!isNaN(saved)) zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, saved));
   } catch (e) {}
   applyZoom();
+
+  /* ===== 최근 수정 내역: /api/recent 에서 각 시트의 최종 수정 시각을 받아 최대 3개 표시 ===== */
+  const recentList = document.getElementById("recent-list");
+  async function loadRecent() {
+    try {
+      const res = await fetch("/api/recent");
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      const entries = (data.results || [])
+        .filter(r => r.lastModified)
+        .map(r => ({ key: r.key, title: r.title, time: new Date(r.lastModified) }))
+        .filter(e => !isNaN(e.time))
+        .sort((a, b) => b.time - a.time)
+        .slice(0, 3);
+      recentList.innerHTML = "";
+      if (!entries.length) {
+        recentList.innerHTML = '<li class="r-empty">수정 내역을 불러올 수 없습니다.</li>';
+        return;
+      }
+      entries.forEach(e => {
+        const li = document.createElement("li");
+        const dot = document.createElement("span");
+        dot.className = "r-dot";
+        dot.style.background = SHEETS[e.key] ? SHEETS[e.key].color : "#9ca3af";
+        const title = document.createElement("span");
+        title.className = "r-title";
+        title.textContent = e.title;
+        li.appendChild(dot);
+        li.appendChild(title);
+        li.appendChild(document.createTextNode(" 시트 수정 · " + e.time.toLocaleString("ko-KR", {
+          timeZone: "Asia/Seoul",
+          year: "numeric", month: "2-digit", day: "2-digit",
+          hour: "2-digit", minute: "2-digit"
+        })));
+        recentList.appendChild(li);
+      });
+    } catch (err) {
+      recentList.innerHTML = '<li class="r-empty">수정 내역을 불러올 수 없습니다.</li>';
+    }
+  }
+  loadRecent();
 
   window.addEventListener("hashchange", route);
   route();
