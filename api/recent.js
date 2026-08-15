@@ -51,6 +51,38 @@ function readZipFile(buf, e) {
   return e.method === 0 ? data : inflateRawSync(data);
 }
 
+function textOf(xml) {
+  const out = [];
+  const re = /<t[^>]*>([\s\S]*?)<\/t>/g;
+  let m;
+  while ((m = re.exec(xml))) out.push(m[1]);
+  return decodeEntities(out.join(""));
+}
+
+// export마다 XML이 비결정적이므로(공유 문자열 인덱스·스타일 등),
+// 셀 주소 + 수식 + 실제 값만 정규화해서 해시한다. 수식 셀은 캐시된 계산값을
+// 제외해 NOW/TODAY 같은 휘발성 함수로 인한 거짓 감지를 막는다.
+function canonicalCells(xml, shared) {
+  const out = [];
+  const re = /<c\b[^>]*(?:\/>|>[\s\S]*?<\/c>)/g;
+  let m;
+  while ((m = re.exec(xml))) {
+    const cell = m[0];
+    const ref = (cell.match(/\br="([^"]+)"/) || [])[1] || "";
+    const type = (cell.match(/\bt="([^"]+)"/) || [])[1] || "";
+    const f = (cell.match(/<f[^>]*>([\s\S]*?)<\/f>/) || [])[1];
+    let val = "";
+    if (f === undefined) {
+      const v = (cell.match(/<v[^>]*>([\s\S]*?)<\/v>/) || [])[1];
+      if (type === "s" && v !== undefined) val = shared[parseInt(v, 10)] || "";
+      else if (type === "inlineStr") val = textOf(cell);
+      else val = v || "";
+    }
+    out.push(ref + "|" + (f || "") + "|" + val);
+  }
+  return out.join("\n");
+}
+
 // xlsx export에서 [{ name(탭 이름), hash(내용 해시) }] 목록 추출
 async function sheetTabs(sheet) {
   const r = await fetch("https://docs.google.com/spreadsheets/d/" + sheet.id + "/export?format=xlsx", { redirect: "follow" });
@@ -59,6 +91,15 @@ async function sheetTabs(sheet) {
   const entries = readZipEntries(buf);
   if (!entries["xl/workbook.xml"]) throw new Error("workbook.xml not found");
   const wb = readZipFile(buf, entries["xl/workbook.xml"]).toString("utf8");
+
+  const shared = [];
+  if (entries["xl/sharedStrings.xml"]) {
+    const ss = readZipFile(buf, entries["xl/sharedStrings.xml"]).toString("utf8");
+    const reSi = /<si>([\s\S]*?)<\/si>/g;
+    let ms;
+    while ((ms = reSi.exec(ss))) shared.push(textOf(ms[1]));
+  }
+
   const names = [];
   const re = /<sheet[^>]*\sname="([^"]*)"/g;
   let m;
@@ -67,7 +108,8 @@ async function sheetTabs(sheet) {
     .map((name, i) => {
       const e = entries["xl/worksheets/sheet" + (i + 1) + ".xml"];
       if (!e) return null;
-      return { name, hash: createHash("sha256").update(readZipFile(buf, e)).digest("hex") };
+      const xml = readZipFile(buf, e).toString("utf8");
+      return { name, hash: createHash("sha256").update(canonicalCells(xml, shared)).digest("hex") };
     })
     .filter(Boolean);
 }
