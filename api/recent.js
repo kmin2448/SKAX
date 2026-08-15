@@ -172,7 +172,8 @@ module.exports = async (req, res) => {
       seen.add(r.key);
       latest.push({ key: r.key, title: titles[r.key] || r.key, tab: r.tab || null, changedAt: r.changed_at });
     }
-    res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=120");
+    // 캐시하면 수정 직후 방문에서 이전 응답이 보이므로 매 요청마다 감지를 수행한다
+    res.setHeader("Cache-Control", "no-store");
     res.status(200).json(debug ? { changes: latest, debug: dbg } : { changes: latest });
   } catch (e) {
     res.status(200).json({ changes: [], error: String(e) });
