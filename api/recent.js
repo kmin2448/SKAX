@@ -1,7 +1,9 @@
 // 각 구글 시트의 "탭별" 내용 해시를 저장해 두고, 바뀐 탭을 감지해 기록한 뒤
 // 시트별 최신 수정 내역 1건씩을 반환하는 서버리스 함수.
-// 시트가 "링크가 있는 모든 사용자" 공유일 때만 동작한다 (인증 없이 htmlview/export 접근).
+// xlsx export(zip)를 직접 파싱해 탭 이름(xl/workbook.xml)과 탭별 내용(xl/worksheets/sheetN.xml)을 읽는다.
+// 시트가 "링크가 있는 모든 사용자" 공유일 때만 동작한다 (인증 없이 export 접근).
 const { createHash } = require("crypto");
+const { inflateRawSync } = require("zlib");
 
 const SB_URL = "https://ytkidrqfyguufyzfpwqy.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0a2lkcnFmeWd1dWZ5emZwd3F5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMTYyMzMsImV4cCI6MjA5MTY5MjIzM30.sfIujbIeRyMWu6GfZ3d42vOOCEQBZMoBuYWEj-FlH30";
@@ -15,25 +17,59 @@ const SHEETS = [
 function decodeEntities(s) {
   return s
     .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/<[^>]*>/g, "").trim();
+    .replace(/&#39;/g, "'").replace(/&quot;/g, '"').trim();
 }
 
-// htmlview 페이지에서 탭 목록(gid + 탭 이름) 추출
-async function listTabs(sheet) {
-  const r = await fetch("https://docs.google.com/spreadsheets/d/" + sheet.id + "/htmlview", { redirect: "follow" });
-  if (!r.ok) throw new Error("htmlview HTTP " + r.status);
-  const html = await r.text();
-  const tabs = [];
-  const re = /sheet-button-(\d+)[^>]*>\s*<a[^>]*>([\s\S]*?)<\/a>/g;
+// 최소한의 zip 리더 (central directory 순회 + raw deflate 해제)
+function readZipEntries(buf) {
+  let i = buf.length - 22;
+  while (i >= 0 && buf.readUInt32LE(i) !== 0x06054b50) i--;
+  if (i < 0) throw new Error("EOCD not found");
+  const count = buf.readUInt16LE(i + 10);
+  let off = buf.readUInt32LE(i + 16);
+  const entries = {};
+  for (let n = 0; n < count; n++) {
+    if (buf.readUInt32LE(off) !== 0x02014b50) break;
+    const method = buf.readUInt16LE(off + 10);
+    const compSize = buf.readUInt32LE(off + 20);
+    const nameLen = buf.readUInt16LE(off + 28);
+    const extraLen = buf.readUInt16LE(off + 30);
+    const commentLen = buf.readUInt16LE(off + 32);
+    const lho = buf.readUInt32LE(off + 42);
+    const name = buf.toString("utf8", off + 46, off + 46 + nameLen);
+    entries[name] = { method, compSize, lho };
+    off += 46 + nameLen + extraLen + commentLen;
+  }
+  return entries;
+}
+
+function readZipFile(buf, e) {
+  const nameLen = buf.readUInt16LE(e.lho + 26);
+  const extraLen = buf.readUInt16LE(e.lho + 28);
+  const start = e.lho + 30 + nameLen + extraLen;
+  const data = buf.subarray(start, start + e.compSize);
+  return e.method === 0 ? data : inflateRawSync(data);
+}
+
+// xlsx export에서 [{ name(탭 이름), hash(내용 해시) }] 목록 추출
+async function sheetTabs(sheet) {
+  const r = await fetch("https://docs.google.com/spreadsheets/d/" + sheet.id + "/export?format=xlsx", { redirect: "follow" });
+  if (!r.ok) throw new Error("xlsx HTTP " + r.status);
+  const buf = Buffer.from(await r.arrayBuffer());
+  const entries = readZipEntries(buf);
+  if (!entries["xl/workbook.xml"]) throw new Error("workbook.xml not found");
+  const wb = readZipFile(buf, entries["xl/workbook.xml"]).toString("utf8");
+  const names = [];
+  const re = /<sheet[^>]*\sname="([^"]*)"/g;
   let m;
-  while ((m = re.exec(html))) tabs.push({ gid: m[1], name: decodeEntities(m[2]) });
-  return tabs;
-}
-
-async function tabHash(sheet, gid) {
-  const r = await fetch("https://docs.google.com/spreadsheets/d/" + sheet.id + "/export?format=csv&gid=" + gid, { redirect: "follow" });
-  if (!r.ok) throw new Error("export HTTP " + r.status);
-  return createHash("sha256").update(await r.text()).digest("hex");
+  while ((m = re.exec(wb))) names.push(decodeEntities(m[1]));
+  return names
+    .map((name, i) => {
+      const e = entries["xl/worksheets/sheet" + (i + 1) + ".xml"];
+      if (!e) return null;
+      return { name, hash: createHash("sha256").update(readZipFile(buf, e)).digest("hex") };
+    })
+    .filter(Boolean);
 }
 
 module.exports = async (req, res) => {
@@ -42,8 +78,8 @@ module.exports = async (req, res) => {
   try {
     await Promise.all(SHEETS.map(async (sheet) => {
       let tabs;
-      try { tabs = await listTabs(sheet); } catch (e) { if (debug) dbg[sheet.key] = String(e); return; }
-      if (debug) dbg[sheet.key] = tabs;
+      try { tabs = await sheetTabs(sheet); } catch (e) { if (debug) dbg[sheet.key] = String(e); return; }
+      if (debug) dbg[sheet.key] = tabs.map(t => t.name);
       if (!tabs.length) return;
 
       const stRes = await fetch(
@@ -57,14 +93,12 @@ module.exports = async (req, res) => {
       const upserts = [];
       const changes = [];
 
-      await Promise.all(tabs.map(async (t) => {
-        let h;
-        try { h = await tabHash(sheet, t.gid); } catch (e) { return; }
-        const k = sheet.key + ":" + t.gid;
-        if (prevMap[k] === h) return;
-        upserts.push({ key: k, hash: h, changed_at: now });
+      for (const t of tabs) {
+        const k = sheet.key + ":" + t.name;
+        if (prevMap[k] === t.hash) continue;
+        upserts.push({ key: k, hash: t.hash, changed_at: now });
         if (hadBaseline) changes.push({ key: sheet.key, tab: t.name, changed_at: now });
-      }));
+      }
 
       if (upserts.length) {
         await fetch(SB_URL + "/rest/v1/skax_sheet_state", {
