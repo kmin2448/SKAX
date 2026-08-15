@@ -473,16 +473,15 @@
   } catch (e) {}
   applyZoom();
 
-  /* ===== 최근 수정 내역: /api/recent 에서 각 시트의 최종 수정 시각을 받아 최대 3개 표시 ===== */
+  /* ===== 최근 수정 내역: /api/recent 에서 시트 변경 기록을 받아 최대 3개 표시 ===== */
   const recentList = document.getElementById("recent-list");
   async function loadRecent() {
     try {
       const res = await fetch("/api/recent");
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
-      const entries = (data.results || [])
-        .filter(r => r.lastModified)
-        .map(r => ({ key: r.key, title: r.title, time: new Date(r.lastModified) }))
+      const entries = (data.changes || [])
+        .map(c => ({ key: c.key, title: c.title, time: new Date(c.changedAt) }))
         .filter(e => !isNaN(e.time))
         .sort((a, b) => b.time - a.time)
         .slice(0, 3);
