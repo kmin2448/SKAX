@@ -481,7 +481,7 @@
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
       const entries = (data.changes || [])
-        .map(c => ({ key: c.key, title: c.title, time: new Date(c.changedAt) }))
+        .map(c => ({ key: c.key, title: c.title, tab: c.tab || null, time: new Date(c.changedAt) }))
         .filter(e => !isNaN(e.time))
         .sort((a, b) => b.time - a.time)
         .slice(0, 3);
@@ -500,7 +500,8 @@
         title.textContent = e.title;
         li.appendChild(dot);
         li.appendChild(title);
-        li.appendChild(document.createTextNode(" 시트 수정 · " + e.time.toLocaleString("ko-KR", {
+        li.appendChild(document.createTextNode(
+          (e.tab ? " ‘" + e.tab + "’ 탭 수정" : " 시트 수정") + " · " + e.time.toLocaleString("ko-KR", {
           timeZone: "Asia/Seoul",
           year: "numeric", month: "2-digit", day: "2-digit",
           hour: "2-digit", minute: "2-digit"
