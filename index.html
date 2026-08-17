@@ -435,8 +435,10 @@
 
   // 구글 시트 상단 편집 UI(제목 줄·메뉴·툴바·수식 입력줄)의 높이(px).
   // 편집 종료 상태에서는 이 높이만큼 iframe을 위로 밀어 올려 화면 밖으로 숨긴다.
+  // 값이 실제보다 크면 열 머리글(A·B·C…) 윗부분이 잘리므로, 조금 덜 숨겨서
+  // 열 머리글이 온전히 보이도록 여유를 둔다. (남는 부분은 수식 입력줄 아래 여백이라 눈에 띄지 않는다)
   // 구글 UI가 바뀌어 잘리는 위치가 어긋나면 localStorage 의 sheetChromePx 로 조정할 수 있다.
-  const SHEET_CHROME_PX = 148;
+  const SHEET_CHROME_PX = 138;
   let chromePx = SHEET_CHROME_PX;
   try {
     const c = parseInt(localStorage.getItem("sheetChromePx"), 10);
