@@ -348,12 +348,13 @@
     }
   };
 
-  // full=true: 구글 시트 메뉴·툴바 포함 전체 편집 UI / full=false: rm=minimal (메뉴·툴바 숨김, 셀 편집은 가능)
-  // keepPosition=true: gid를 지정하지 않고 열어, 구글 계정이 기억하는 마지막 탭·셀 위치를 유지
-  function sheetUrl(sheet, full, keepPosition) {
+  // 시트는 항상 전체 편집 UI로 한 번만 불러온다.
+  // (편집 전환 때마다 rm=minimal 로 다시 불러오면 iframe이 재로딩되면서 보고 있던 탭이
+  //  첫 번째 탭으로 되돌아간다. 다른 도메인의 iframe이라 현재 탭 gid를 읽어올 수도 없으므로
+  //  아예 재로딩을 하지 않고, 편집 종료 시에는 메뉴·툴바 영역만 화면 밖으로 밀어 숨긴다.)
+  function sheetUrl(sheet) {
     const base = "https://docs.google.com/spreadsheets/d/" + sheet.id + "/edit";
-    if (keepPosition) return base + (full ? "" : "?rm=minimal");
-    return base + "?gid=" + sheet.gid + (full ? "" : "&rm=minimal") + "#gid=" + sheet.gid;
+    return base + "?gid=" + sheet.gid + "#gid=" + sheet.gid;
   }
 
   const home = document.getElementById("home");
@@ -374,8 +375,8 @@
     currentKey = key;
     titleText.textContent = sheet.title;
     dot.style.background = sheet.color;
-    newTabLink.href = sheetUrl(sheet, true);
-    const url = sheetUrl(sheet, editMode);
+    newTabLink.href = sheetUrl(sheet);
+    const url = sheetUrl(sheet);
     if (frame.src !== url) {
       loading.classList.remove("hidden");
       frame.src = url;
@@ -398,11 +399,9 @@
     editToggle.classList.toggle("active", editMode);
     editToggle.setAttribute("aria-pressed", String(editMode));
     editToggle.textContent = editMode ? "✏️ 편집 중" : "✏️ 편집하기";
-    if (currentKey) {
-      loading.classList.remove("hidden");
-      // 토글로 다시 불러올 때는 보고 있던 탭·셀 위치를 유지한 채 전환
-      frame.src = sheetUrl(SHEETS[currentKey], editMode, true);
-    }
+    // 시트를 다시 불러오지 않고 메뉴·툴바 영역만 보이거나 숨기므로,
+    // 편집을 시작하거나 종료해도 보고 있던 탭·셀 위치가 그대로 유지된다.
+    applyFrameLayout();
   });
 
   function route() {
@@ -427,19 +426,36 @@
     if (frame.src !== "about:blank") loading.classList.add("hidden");
   });
 
-  /* ===== 시트 화면 배율 조절 (iframe 영역에만 적용) ===== */
+  /* ===== 시트 화면 배율 조절 + 편집 UI 숨김 (iframe 영역에만 적용) ===== */
   const ZOOM_MIN = 50, ZOOM_MAX = 200, ZOOM_STEP = 10;
   let zoom = 100;
   const zoomInBtn = document.getElementById("zoom-in");
   const zoomOutBtn = document.getElementById("zoom-out");
   const zoomLevel = document.getElementById("zoom-level");
 
-  function applyZoom() {
+  // 구글 시트 상단 편집 UI(제목 줄·메뉴·툴바·수식 입력줄)의 높이(px).
+  // 편집 종료 상태에서는 이 높이만큼 iframe을 위로 밀어 올려 화면 밖으로 숨긴다.
+  // 구글 UI가 바뀌어 잘리는 위치가 어긋나면 localStorage 의 sheetChromePx 로 조정할 수 있다.
+  const SHEET_CHROME_PX = 148;
+  let chromePx = SHEET_CHROME_PX;
+  try {
+    const c = parseInt(localStorage.getItem("sheetChromePx"), 10);
+    if (!isNaN(c) && c >= 0 && c <= 400) chromePx = c;
+  } catch (e) {}
+
+  function applyFrameLayout() {
     const scale = zoom / 100;
-    // iframe을 scale로 확대/축소하되, 보이는 영역을 꽉 채우도록 크기를 역보정한다
+    const hidden = editMode ? 0 : chromePx;
+    // iframe을 scale로 확대/축소하되, 보이는 영역을 꽉 채우도록 크기를 역보정한다.
+    // 편집 종료 상태에서는 숨길 높이(hidden)만큼 iframe을 더 크게 잡고 위로 밀어 올린다.
     frame.style.transform = "scale(" + scale + ")";
     frame.style.width = (100 / scale) + "%";
-    frame.style.height = (100 / scale) + "%";
+    frame.style.height = "calc(" + (100 / scale) + "% + " + hidden + "px)";
+    frame.style.top = (-hidden * scale) + "px";
+  }
+
+  function applyZoom() {
+    applyFrameLayout();
     zoomLevel.textContent = zoom + "%";
     zoomOutBtn.disabled = zoom <= ZOOM_MIN;
     zoomInBtn.disabled = zoom >= ZOOM_MAX;
